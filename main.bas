@@ -48,13 +48,25 @@ Sub Init
     lpanel.style.padding = "4px"
     lpanel.style.borderRight = "1px solid #999"
 
-    Dim As Object toolbar, saveBtn
+    Dim As Object toolbar, btnSave, btnSaveProj, btnLoad
     toolbar = Dom.Create("div", lpanel)
-    toolbar.style.float = "right"
-    toolbar.style.marginRight = "5px"
-    saveBtn = Dom.Create("a", toolbar, "Save")
-    saveBtn.href = "#"
-    Dom.Event saveBtn, "click", sub_OnSave
+    toolbar.style.padding = "5px"
+    toolbar.style.paddingTop = "0px"
+    toolbar.style.marginBottom = "4px"
+    toolbar.style.borderBottom = "1px solid #999"
+    btnLoad = Dom.Create("a", toolbar, "Load Form")
+    btnLoad.href = "#"
+    Dom.Event btnLoad, "click", sub_OnLoad
+    btnSave = Dom.Create("a", toolbar, "Save Form")
+    btnSave.href = "#"
+    btnSave.style.borderLeft = "1px solid #999"
+    btnSave.style.paddingLeft = "4px"
+    Dom.Event btnSave, "click", sub_OnSaveForm
+    btnSaveProj = Dom.Create("a", toolbar, "Save Project")
+    btnSaveProj.href = "#"
+    btnSaveProj.style.borderLeft = "1px solid #999"
+    btnSaveProj.style.paddingLeft = "4px"
+    Dom.Event btnSaveProj, "click", sub_OnSaveProject
     
 
     Dim As Object bpanel
@@ -152,7 +164,8 @@ Sub SelectControl (id As Integer)
     PGrid.AddProp "Width", ctrl.width
     PGrid.AddProp "Height", ctrl.height
     PGrid.AddHeader "Events"
-    PGrid.AddProp "Click", ""
+    PGrid.AddProp "Click", UI.GetEventHandler(id, "Click")
+    PGrid.AddProp "SetFocus", UI.GetEventHandler(id, "SetFocus")
 End Sub
 
 Sub UpdateControl (id)
@@ -197,6 +210,84 @@ End Sub
 
 Function Q (text As String)
     Q = Chr$(34) + text + Chr$(34)
+End Function
+
+Function Unquote (text As String)
+    Unquote = Mid$(text, 2, Len(text) - 2)
+End Function
+
+Sub ListSplit (sourceString As String, results() As String)
+    Dim cstr As String
+    Dim As Long p, curpos, arrpos, dpos
+
+    cstr = _Trim$(sourceString)
+
+    ReDim As String results(0)
+
+    Dim quoteMode As Integer
+    Dim result As String
+    Dim count As Integer
+    Dim paren As Integer
+    Dim i As Integer
+    For i = 1 To Len(cstr)
+        Dim c As String
+        c = Mid$(cstr, i, 1)
+
+        If c = Chr$(34) Then
+            quoteMode = Not quoteMode
+            result = result + c
+
+        ElseIf quoteMode Then
+            result = result + c
+
+        ElseIf c = "(" Then
+            paren = paren + 1
+            result = result + c
+
+        ElseIf c = ")" Then
+            paren = paren - 1
+            result = result + c
+
+        ElseIf paren > 0 Then
+            result = result + c
+
+        ElseIf c = "," Then
+
+            count = UBound(results) + 1
+            ReDim _Preserve As String results(count)
+            results(count) = result
+            result = ""
+        Else
+            result = result + c
+        End If
+
+    Next i
+
+    ' add the leftover last segment
+    If result <> "" Then
+        count = UBound(results) + 1
+        ReDim _Preserve As String results(count)
+        results(count) = result
+    End If
+End Sub
+
+Function Replace$ (s As String, searchString As String, newString As String)
+    Dim ns As String
+    Dim i As Integer
+
+    Dim slen As Integer
+    slen = Len(searchString)
+
+    For i = 1 To Len(s) '- slen + 1
+        If Mid$(s, i, slen) = searchString Then
+            ns = ns + newString
+            i = i + slen - 1
+        Else
+            ns = ns + Mid$(s, i, 1)
+        End If
+    Next i
+
+    Replace = ns
 End Function
 
 ' Event Handlers
@@ -251,36 +342,136 @@ Sub OnPropChange (event)
     End If
     
     UI.SetEventHandler id, "Click", PGrid.GetValue("Click")
-
+    UI.SetEventHandler id, "SetFocus", PGrid.GetValue("SetFocus")
     UpdateControl id
 End Sub
 
-Sub OnSave
+Sub OnLoad
+    FS.UploadFile "/tmp", ".frm", sub_OnLoadComplete
+End Sub
+
+Sub OnLoadComplete (filepath As String)
+    Init
+
+    Dim readEnabled As Integer
+    Dim section As String
+    ReDim parts(0) As String
+
+    Open filepath For Input As #1
+    While Not EOF(1)
+        Dim s As String
+        Line Input #1, s
+        Print s
+    
+        If readEnabled Then
+            If Mid$(s, 1, 1) = "'" Then
+                section = Mid$(s, 3)
+                Line Input #1, s ' throw away the count we don't need it here
+
+            ElseIf s = "Data " + Chr$(34) + "webui_end" + Chr$(34) Then
+                readEnabled = 0
+            
+            ElseIf section = "Controls" Then
+                ListSplit s, parts()
+                Dim As String ctype, cname, layout, text, x, y, cwidth, cheight
+                Dim As Integer parentId, multiline, cid
+                cid = Val(Mid$(parts(1), 6))
+                ctype = Unquote(parts(2))
+                cname = Unquote(parts(3))
+                parentId = Val(parts(4))
+                layout = Unquote(parts(5))
+                text = Replace(Unquote(parts(6)), "\n", Chr$(10))
+                multiline = Val(parts(7))
+                x = Unquote(parts(8))
+                y = Unquote(parts(9))
+                'Print ctype, cname, parentId, layout, text
+                Dim c As Integer
+                If ctype = "panel" Then
+                    If cid = 1 Then
+                        c = 1
+                    Else
+                        c = UI.CreatePanel(layout, parentId)
+                    End If
+                ElseIf ctype = "label" Then
+                    c = UI.CreateLabel(parentId, text)
+                ElseIf ctype = "textbox" Then
+                    c = UI.CreateTextbox(parentId, multiline)
+                ElseIf ctype = "button" Then
+                    c = UI.CreateButton(parentId, text)
+                End If
+                If cname <> "" Then
+                    UI.SetName c, cname
+                End If
+                If x <> "" And y <> "" Then
+                    UI.SetPos c, x, y
+                End If
+                If cwidth <> "" Then UI.SetWidth c, cwidth
+                If cheight <> "" Then UI.SetHeight c, cheight
+            
+            ElseIf section = "Events" Then
+                Console.Echo s
+                Dim As Integer cid
+                Dim As String event, method
+                ListSplit s, parts()
+                cid = Val(Mid$(parts(1), 6))
+                event = Unquote(parts(2))
+                method = Unquote(parts(3))
+                If event <> "" And method <> "" Then
+                    UI.SetEventHandler cid, event, method
+                End If
+            End If
+        End If
+
+        If Mid$(s, 1, 6) = "webui_" Then
+            readEnabled = -1
+        End If    
+    Wend
+    Close #1
+End Sub
+
+Sub OnSaveForm
+    Save False
+End Sub
+
+Sub OnSaveProject
+    Save True
+End Sub
+
+Sub Save (project As Integer)
     MkDir "tmp"
     Open "tmp/program.frm" For Output As #1
     Print #1, UI.ExportUI
     Close #1
     
-    Open "tmp/main.bas" For Output As #1
-    Print #1, "Import Dom From " + Q("lib/web/dom.bas")
-    Print #1, "Import UI From " + Q("webui.bas")
-    Print #1, "Import Form From " + Q("program.frm")
-    Print #1, ""
-    Print #1, "' TODO: Your code here."
-    Close #1
+    If project Then
+        Open "tmp/main.bas" For Output As #1
+        Print #1, "Import Dom From " + Q("lib/web/dom.bas")
+        Print #1, "Import Console From " + Q("lib/web/console.bas")
+        Print #1, "Import UI From " + Q("webui.bas")
+        Print #1, "Import Form From " + Q("program.frm")
+        Print #1, ""
+        Print #1, "' TODO: Your code here."
+        ReDim events(0) As Object
+        UI.GetEvents events()
+        Print #1, "// " + UBound(events)
+        Close #1
 
-    Open "webui.bas" For Input As #1
-    Open "tmp/webui.bas" For Output As #2
-    Dim As String s, text
-    While Not EOF(1)
-        Line Input #1, text
-        Print #2, text
-    Wend
-    Close #1
-    Close #2
-    'FS.DownloadFile "tmp/program.frm"
-    ZipProject
+
+        Open "webui.bas" For Input As #1
+        Open "tmp/webui.bas" For Output As #2
+        Dim As String s, text
+        While Not EOF(1)
+            Line Input #1, text
+            Print #2, text
+        Wend
+        Close #1
+        Close #2
+        ZipProject
+    Else
+        FS.DownloadFile "tmp/program.frm"
+    End If
 End Sub
+
 
 Sub OnDragEnter(event)
     PreventDefault event

@@ -5,7 +5,7 @@ Export PANEL, BUTTON, LABEL, TEXTBOX
 Export LAYOUT_FIXED, LAYOUT_FLOW
 Export Init, CreatePanel, CreateButton, CreateLabel, CreateTextBox
 Export SetName, GetName, SetText, GetText, SetPos, SetWidth, SetHeight, GetWidth, GetHeight, Event, CSS
-Export GetEventHandler, SetEventHandler, ControlCount
+Export GetEventHandler, SetEventHandler, GetEvents, ControlCount
 Export GetControl, ExportUI, LoadUI, GetSub
 
 Const GRIDSIZE = 5
@@ -35,9 +35,9 @@ Type CEvent
     method As String
 End Type
 
-Dim Shared controls(0) As Control
+ReDim Shared controls(0) As Control
 'Dim Shared events(0) As CEvent
-Dim Shared eventMap() As String
+ReDim Shared eventMap() As String
 Dim Shared As Object cpanel
 
 
@@ -187,6 +187,8 @@ Function Q(s As String)
 End Function
 
 Sub Init (dmode As Integer)
+    Clear
+    ReDim controls(0) As Control
     'designMode = dmode
     
     Dom.Container().style.textAlign = "left"
@@ -506,13 +508,14 @@ Sub GetEvents (events() As CEvent)
         'Dim subName As String
         $If Javascript Then
             var keys = Object.keys(ce);
-            console.log(ce);
-            console.log(keys);
+            //console.log(ce);
+            //console.log(keys);
+            console.log("l:" + keys.length);
             for (var ki=0; ki < keys.length; ki++) {
                 var k = keys[ki];
                 var subName = ce[k];
-                console.log(k);                
-                console.log(subName);
+                console.log("key: " + k);                
+                console.log("sub: " + subName);
         $End If
                 Dim ecount As Integer
                 ecount = UBound(events) + 1
@@ -524,4 +527,27 @@ Sub GetEvents (events() As CEvent)
             }
         $End If
     Next i
+End Sub
+
+Sub Clear
+$If Javascript Then
+    if (QB._domElements) {
+        var e = null;    
+        while (e = QB._domElements.pop()) {
+            e.remove();
+        }
+    }
+    else { 
+        QB._domElements = []; 
+    }
+
+    if (QB._domEvents) {
+        while (e = QB._domEvents.pop()) {
+            e.target.removeEventListener(e.eventType, e.callbackFn);
+        }
+    }
+    else {
+        QB._domEvents = [];
+    }
+$End If
 End Sub
