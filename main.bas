@@ -40,7 +40,7 @@ Sub Init
     cpanel = o.e.parentNode
     
     cpanel.style.display = "grid"
-    cpanel.style.gridTemplateColumns = "1fr 3fr"
+    cpanel.style.gridTemplateColumns = "300px auto"
     cpanel.style.height = "100%"
 
     Dim lpanel As Object
@@ -173,7 +173,7 @@ Sub UpdateControl (id)
     c = UI.GetControl(id)
     
     If c.type = UI.BUTTON Or c.type = UI.LABEL Then
-        c.e.innerHTML = GXSTR_Replace(c.text, Chr$(10), "<br>")
+        c.e.innerHTML = GXSTR_Replace(c.text, NL, "<br>")
     End If
     
     If c.type = UI.TEXTBOX Then
@@ -307,7 +307,7 @@ Sub OnPropChange (event)
         Dim As String layout
         layout = PGrid.GetValue("Layout")
         If layout <> ctrl.layout Then
-            If layout = LAYOUT_FLOW Then
+            If layout = UI.LAYOUT_FLOW Then
                 UI.CSS id, "background-image", "none"
             Else
                 UI.CSS id, "background-image", "url('" + DataUrl("img/grid-5.png") + "')"
@@ -380,10 +380,12 @@ Sub OnLoadComplete (filepath As String)
                 cname = Unquote(parts(3))
                 parentId = Val(parts(4))
                 layout = Unquote(parts(5))
-                text = Replace(Unquote(parts(6)), "\n", Chr$(10))
+                text = Replace(Unquote(parts(6)), "\n", NL)
                 multiline = Val(parts(7))
                 x = Unquote(parts(8))
                 y = Unquote(parts(9))
+                cwidth = Unquote(parts(10))
+                cheight = Unquote(parts(11))
                 'Print ctype, cname, parentId, layout, text
                 Dim c As Integer
                 If ctype = "panel" Then
@@ -453,7 +455,19 @@ Sub Save (project As Integer)
         Print #1, "' TODO: Your code here."
         ReDim events(0) As Object
         UI.GetEvents events()
-        Print #1, "// " + UBound(events)
+        If UBound(events) > 0 Then
+            Print #1, NL
+            Print #1, "' Event Handlers"
+            Print #1, "' ------------------------------------------------------------"
+            Dim i As Integer
+            For i = 1 To UBound(events)
+                Print #1, ""
+                Print #1, "Sub "; events(i).method;
+                Print #1, "    ' TODO: event logic here"
+                Print #1, "    Console.Log " + Q(events(i).method)
+                Print #1, "End Sub"
+            Next i
+        End If    
         Close #1
 
 

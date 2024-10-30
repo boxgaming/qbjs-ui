@@ -517,12 +517,14 @@ Sub GetEvents (events() As CEvent)
                 console.log("key: " + k);                
                 console.log("sub: " + subName);
         $End If
-                Dim ecount As Integer
-                ecount = UBound(events) + 1
-                ReDim _Preserve events(ecount) As CEvent
-                events(ecount).cid = i
-                events(ecount).event = k
-                events(ecount).method = subName
+		If subName <> "" Then
+                    Dim ecount As Integer
+                    ecount = UBound(events) + 1
+                    ReDim _Preserve events(ecount) As CEvent
+                    events(ecount).cid = i
+                    events(ecount).event = k
+                    events(ecount).method = subName
+		End If
         $If Javascript Then
             }
         $End If
